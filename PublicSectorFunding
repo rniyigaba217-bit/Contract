@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract PublicSpendingTracker {
+    address public government; // Only government can allocate/spend
+    uint256 public totalBudget;
+
+    // Define the main sectors
+    enum Sector {
+        Education,
+        Healthcare,
+        Infrastructure,
+        Security,
+        Sanitation,
+        SocialWelfare
+    }
+
+    // Track allocations and expenditures per sector
+    struct SectorInfo {
+        uint256 allocated;
+        uint256 spent;
+    }
+
+    mapping(Sector => SectorInfo) public sectors;
+
+    // Events for transparency
+    event BudgetAllocated(Sector sector, uint256 amount);
+    event FundsSpent(Sector sector, uint256 amount, string description);
+
+    constructor() {
+        government = msg.sender; // Deployer is the government
+    }
+
+    modifier onlyGovernment() {
+        require(msg.sender == government, "Not authorized");
+        _;
+    }
+
+    // Allocate funds to a sector
+    function allocateBudget(Sector sector, uint256 amount) public onlyGovernment {
+        sectors[sector].allocated += amount;
+        totalBudget += amount;
+        emit BudgetAllocated(sector, amount);
+    }
+
+    // Record a spending transaction
+    function spendFunds(Sector sector, uint256 amount, string memory description) public onlyGovernment {
+        require(sectors[sector].allocated >= sectors[sector].spent + amount, "Insufficient funds");
+        sectors[sector].spent += amount;
+        emit FundsSpent(sector, amount, description);
+    }
+
+    // View remaining funds for a sector
+    function getRemainingFunds(Sector sector) public view returns (uint256) {
+        return sectors[sector].allocated - sectors[sector].spent;
+    }
+
+    // Public function to see all details of a sector
+    function getSectorInfo(Sector sector)
+        public
+        view
+        returns (uint256 allocated, uint256 spent, uint256 remaining)
+    {
+        allocated = sectors[sector].allocated;
+        spent = sectors[sector].spent;
+        remaining = allocated - spent;
+    }
+}
