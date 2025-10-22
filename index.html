@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blockchain School Grading System</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f6f8fb;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 {
+      color: #0057b8;
+      margin-bottom: 5px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    button {
+      background-color: #0057b8;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #00419d;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🎓 Blockchain School Grading System (Demo)</h2>
+  <p>Connected Network: <span id="network">Not connected</span></p>
+  <p>Wallet: <span id="wallet">Not connected</span></p>
+  <button onclick="connectWallet()">Connect MetaMask</button>
+
+  <div class="container">
+    <h3>Record Student Attempt</h3>
+    <input type="text" id="student" placeholder="Student Address" />
+    <input type="number" id="testScore" placeholder="Test Score" />
+    <input type="number" id="examScore" placeholder="Exam Score" />
+    <input type="text" id="note" placeholder="Note (e.g. Initial Attempt)" />
+    <button onclick="recordAttempt()">Record Attempt</button>
+  </div>
+
+  <div class="container">
+    <h3>Request Resit</h3>
+    <input type="text" id="resitStudent" placeholder="Student Address" />
+    <textarea id="resitReason" placeholder="Reason for resit"></textarea>
+    <button onclick="requestResit()">Request Resit</button>
+  </div>
+
+  <div class="container">
+    <h3>Approve Resit</h3>
+    <input type="number" id="resitId" placeholder="Resit ID" />
+    <button onclick="approveResit()">Approve Resit</button>
+  </div>
+
+  <div class="container">
+    <h3>Submit Resit Result</h3>
+    <input type="number" id="resitIdExec" placeholder="Resit ID" />
+    <input type="number" id="resitTest" placeholder="Test Score" />
+    <input type="number" id="resitExam" placeholder="Exam Score" />
+    <input type="text" id="resitNote" placeholder="Note (e.g. Resit after illness)" />
+    <button onclick="submitResit()">Submit Resit Result</button>
+  </div>
+
+  <div class="container">
+    <h3>View Student Attempts</h3>
+    <input type="text" id="viewStudent" placeholder="Student Address" />
+    <button onclick="viewAttempts()">View Attempts</button>
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    let web3;
+    let contract;
+    const contractAddress = "YOUR_CONTRACT_ADDRESS"; // Replace with your deployed contract address
+
+    const abi = [
+      // simplified ABI for key functions
+      {
+        "inputs": [
+          {"internalType":"address","name":"_student","type":"address"},
+          {"internalType":"uint256","name":"_testScore","type":"uint256"},
+          {"internalType":"uint256","name":"_examScore","type":"uint256"},
+          {"internalType":"string","name":"_note","type":"string"}
+        ],
+        "name":"recordInitialAttempt",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
+      },
+      {
+        "inputs":[{"internalType":"address","name":"_student","type":"address"},{"internalType":"string","name":"_reason","type":"string"}],
+        "name":"requestResit","outputs":[],"stateMutability":"nonpayable","type":"function"
+      },
+      {
+        "inputs":[{"internalType":"uint256","name":"_resitId","type":"uint256"}],
+        "name":"approveResit","outputs":[],"stateMutability":"nonpayable","type":"function"
+      },
+      {
+        "inputs":[
+          {"internalType":"uint256","name":"_resitId","type":"uint256"},
+          {"internalType":"uint256","name":"_testScore","type":"uint256"},
+          {"internalType":"uint256","name":"_examScore","type":"uint256"},
+          {"internalType":"string","name":"_note","type":"string"}
+        ],
+        "name":"submitResitResult",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
+      },
+      {
+        "inputs":[{"internalType":"address","name":"_student","type":"address"}],
+        "name":"getAllAttempts",
+        "outputs":[{"components":[
+          {"internalType":"uint256","name":"testScore","type":"uint256"},
+          {"internalType":"uint256","name":"examScore","type":"uint256"},
+          {"internalType":"uint256","name":"finalGrade","type":"uint256"},
+          {"internalType":"uint256","name":"timestamp","type":"uint256"},
+          {"internalType":"string","name":"note","type":"string"}
+        ],"internalType":"struct TransparentGradingWithResits.Attempt[]","name":"","type":"tuple[]"}],
+        "stateMutability":"view","type":"function"
+      }
+    ];
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        const accounts = await web3.eth.getAccounts();
+        document.getElementById("wallet").textContent = accounts[0];
+        const network = await web3.eth.net.getNetworkType();
+        document.getElementById("network").textContent = network;
+        contract = new web3.eth.Contract(abi, contractAddress);
+        alert("Wallet connected!");
+      } else {
+        alert("Please install MetaMask!");
+      }
+    }
+
+    async function recordAttempt() {
+      const s = document.getElementById("student").value;
+      const t = document.getElementById("testScore").value;
+      const e = document.getElementById("examScore").value;
+      const n = document.getElementById("note").value;
+      const accounts = await web3.eth.getAccounts();
+      await contract.methods.recordInitialAttempt(s, t, e, n).send({ from: accounts[0] });
+      alert("Attempt recorded!");
+    }
+
+    async function requestResit() {
+      const s = document.getElementById("resitStudent").value;
+      const r = document.getElementById("resitReason").value;
+      const accounts = await web3.eth.getAccounts();
+      await contract.methods.requestResit(s, r).send({ from: accounts[0] });
+      alert("Resit requested!");
+    }
+
+    async function approveResit() {
+      const id = document.getElementById("resitId").value;
+      const accounts = await web3.eth.getAccounts();
+      await contract.methods.approveResit(id).send({ from: accounts[0] });
+      alert("Resit approved!");
+    }
+
+    async function submitResit() {
+      const id = document.getElementById("resitIdExec").value;
+      const t = document.getElementById("resitTest").value;
+      const e = document.getElementById("resitExam").value;
+      const n = document.getElementById("resitNote").value;
+      const accounts = await web3.eth.getAccounts();
+      await contract.methods.submitResitResult(id, t, e, n).send({ from: accounts[0] });
+      alert("Resit result submitted!");
+    }
+
+    async function viewAttempts() {
+      const s = document.getElementById("viewStudent").value;
+      const attempts = await contract.methods.getAllAttempts(s).call();
+      document.getElementById("output").textContent = JSON.stringify(attempts, null, 2);
+    }
+  </script>
+</body>
+</html>
