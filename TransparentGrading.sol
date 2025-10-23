@@ -44,6 +44,9 @@ contract TransparentGradingWithResits {
     // track resits per student and pending state
     mapping(address => uint[]) public studentResitIds; // student => list of resit ids
     mapping(address => bool) public hasPendingResit;  // student => true if student currently has a pending (unresolved & unexecuted) resit
+    mapping(address => bool) public hasResitted; // true if student already had one resit ever
+
+
 
     uint public resitCounter;
 
@@ -128,26 +131,28 @@ contract TransparentGradingWithResits {
      * Prevents creating a new pending resit if one already exists for that student.
      */
     function requestResit(address _student, string calldata _reason) external {
-        require(!hasPendingResit[_student], "Student already has a pending resit request.");
+    require(!hasPendingResit[_student], "Student already has a pending resit request.");
+    require(!hasResitted[_student], "Student already completed a resit before.");
 
-        resitCounter++;
-        uint id = resitCounter;
-        resits[id] = Resit({
-            id: id,
-            student: _student,
-            reason: _reason,
-            requestedAt: block.timestamp,
-            resolved: false,
-            executed: false,
-            approvalsCount: 0
-        });
+    resitCounter++;
+    uint id = resitCounter;
+    resits[id] = Resit({
+        id: id,
+        student: _student,
+        reason: _reason,
+        requestedAt: block.timestamp,
+        resolved: false,
+        executed: false,
+        approvalsCount: 0
+    });
 
-        // map to student and mark pending
-        studentResitIds[_student].push(id);
-        hasPendingResit[_student] = true;
+    // map to student and mark pending
+    studentResitIds[_student].push(id);
+    hasPendingResit[_student] = true;
 
-        emit ResitRequested(id, _student, _reason);
-    }
+    emit ResitRequested(id, _student, _reason);
+}
+
 
     /**
      * @notice Approve a resit request. When approvals reach minApprovals the resit becomes resolved (allowed).
@@ -197,6 +202,8 @@ contract TransparentGradingWithResits {
 
         r.executed = true;
         hasPendingResit[r.student] = false; // allow new resit requests in future
+        hasResitted[r.student] = true; // permanently mark this student as already resitted
+
 
         emit ResitExecuted(_resitId, r.student, finalGrade, _note);
         emit AttemptRecorded(r.student, attemptIndex, finalGrade, _note);
