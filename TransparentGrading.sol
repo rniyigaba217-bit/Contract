@@ -5,6 +5,7 @@ pragma solidity ^0.8.20;
  * @title TransparentGradingWithResits
  * @dev Records student grading attempts immutably and supports a controlled resit mechanism
  *      Resits require multiple approvers and are logged publicly. Each "attempt" is preserved.
+ *      This version prevents multiple pending resit requests per student and exposes resit ids per student.
  */
 
 contract TransparentGradingWithResits {
@@ -39,6 +40,10 @@ contract TransparentGradingWithResits {
     mapping(address => Attempt[]) private history;   // student => list of attempts
     mapping(uint => Resit) public resits;            // resitId => Resit
     mapping(uint => mapping(address => bool)) public resitApprovals; // resitId => approver => approved (prevents double-approve)
+
+    // track resits per student and pending state
+    mapping(address => uint[]) public studentResitIds; // student => list of resit ids
+    mapping(address => bool) public hasPendingResit;  // student => true if student currently has a pending (unresolved & unexecuted) resit
 
     uint public resitCounter;
 
@@ -120,10 +125,11 @@ contract TransparentGradingWithResits {
     /**
      * @notice Request a resit for a student (teacher or student can request)
      * @dev Creates a resit record which must be approved by approvers
+     * Prevents creating a new pending resit if one already exists for that student.
      */
     function requestResit(address _student, string calldata _reason) external {
-        // caller can be a teacher, student, or ministry; allow broad request.
-        // but we keep approvals strict
+        require(!hasPendingResit[_student], "Student already has a pending resit request.");
+
         resitCounter++;
         uint id = resitCounter;
         resits[id] = Resit({
@@ -135,6 +141,11 @@ contract TransparentGradingWithResits {
             executed: false,
             approvalsCount: 0
         });
+
+        // map to student and mark pending
+        studentResitIds[_student].push(id);
+        hasPendingResit[_student] = true;
+
         emit ResitRequested(id, _student, _reason);
     }
 
@@ -154,13 +165,13 @@ contract TransparentGradingWithResits {
 
         if (resits[_resitId].approvalsCount >= minApprovals) {
             resits[_resitId].resolved = true;
-            // keep event from above to signal resolution (approved count reached)
         }
     }
 
     /**
      * @notice Submit the resit result after the student has taken the resit
      * @dev Only teacher or ministry can submit. Resit must be resolved and not yet executed.
+     *      After execution the student's pending flag is cleared allowing future resit requests.
      */
     function submitResitResult(uint _resitId, uint256 _testScore, uint256 _examScore, string calldata _note)
         external
@@ -185,6 +196,8 @@ contract TransparentGradingWithResits {
         uint attemptIndex = history[r.student].length - 1;
 
         r.executed = true;
+        hasPendingResit[r.student] = false; // allow new resit requests in future
+
         emit ResitExecuted(_resitId, r.student, finalGrade, _note);
         emit AttemptRecorded(r.student, attemptIndex, finalGrade, _note);
     }
@@ -210,12 +223,18 @@ contract TransparentGradingWithResits {
         return history[_student];
     }
 
+    /**
+     * @notice Return array of resit IDs requested for a student (both pending and resolved history)
+     */
+    function getResitsByStudent(address _student) external view returns (uint[] memory) {
+        return studentResitIds[_student];
+    }
+
     // -----------------------
     // Internal utilities
     // -----------------------
     function _computeFinal(uint256 _test, uint256 _exam) internal pure returns (uint256) {
         // example weighting: 40% tests, 60% exams
-        // be mindful of integer arithmetic
         return (_test * 40 + _exam * 60) / 100;
     }
 }
