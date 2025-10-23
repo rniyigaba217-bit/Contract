@@ -1,204 +1,228 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Blockchain School Grading System</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grading DApp — Transparent Resits</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f6f8fb;
-      color: #333;
-      margin: 0;
-      padding: 20px;
-    }
-    h2 {
-      color: #0057b8;
-      margin-bottom: 5px;
-    }
-    .container {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1);
-      padding: 20px;
-      margin-bottom: 30px;
-    }
-    button {
-      background-color: #0057b8;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-    button:hover {
-      background-color: #00419d;
-    }
-    input, textarea {
-      width: 100%;
-      padding: 8px;
-      margin-top: 5px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
+    body { font-family: Arial, sans-serif; background:#f5f7fb; margin:20px; color:#222; }
+    .card { background:#fff; padding:16px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin-bottom:20px;}
+    input, textarea { width:100%; padding:8px; margin:6px 0; border-radius:6px; border:1px solid #dcdcdc; }
+    button { background:#1f6feb; color:white; padding:8px 12px; border:none; border-radius:8px; cursor:pointer; }
+    button:disabled { background:#9bbcf9; cursor:not-allowed; }
+    pre { background:#f3f6ff; padding:10px; border-radius:6px; overflow:auto; }
+    .tag { font-size:13px; padding:4px 8px; border-radius:6px; display:inline-block; }
+    .pending { background:#fff4e5; color:#a05a00; }
+    .resolved { background:#e8f8ee; color:#0b6b2e; }
   </style>
 </head>
 <body>
+  <h2>📘 Grading DApp — Transparent Resit Flow (Demo)</h2>
+  <div class="card">
+    <div>Network: <span id="network">Not connected</span></div>
+    <div>Wallet: <span id="wallet">Not connected</span></div>
+    <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+  </div>
 
-  <h2>🎓 Blockchain School Grading System (Demo)</h2>
-  <p>Connected Network: <span id="network">Not connected</span></p>
-  <p>Wallet: <span id="wallet">Not connected</span></p>
-  <button onclick="connectWallet()">Connect MetaMask</button>
-
-  <div class="container">
-    <h3>Record Student Attempt</h3>
-    <input type="text" id="student" placeholder="Student Address" />
-    <input type="number" id="testScore" placeholder="Test Score" />
-    <input type="number" id="examScore" placeholder="Exam Score" />
-    <input type="text" id="note" placeholder="Note (e.g. Initial Attempt)" />
+  <div class="card">
+    <h3>Record Initial Attempt (teacher)</h3>
+    <input id="studentAddr" placeholder="Student address (0x...)" />
+    <input id="testScore" type="number" placeholder="Test score (e.g. 30)" />
+    <input id="examScore" type="number" placeholder="Exam score (e.g. 70)" />
+    <input id="note" placeholder="Note (e.g. Initial attempt)" />
     <button onclick="recordAttempt()">Record Attempt</button>
   </div>
 
-  <div class="container">
+  <div class="card">
     <h3>Request Resit</h3>
-    <input type="text" id="resitStudent" placeholder="Student Address" />
-    <textarea id="resitReason" placeholder="Reason for resit"></textarea>
-    <button onclick="requestResit()">Request Resit</button>
+    <input id="resitStudent" placeholder="Student address (0x...)" />
+    <textarea id="resitReason" placeholder="Reason for resit (e.g. illness)"></textarea>
+    <button id="requestBtn" onclick="requestResit()">Request Resit</button>
+    <div id="requestResult"></div>
   </div>
 
-  <div class="container">
-    <h3>Approve Resit</h3>
-    <input type="number" id="resitId" placeholder="Resit ID" />
+  <div class="card">
+    <h3>Approve Resit (approver)</h3>
+    <input id="approveId" placeholder="Resit ID (number)" />
     <button onclick="approveResit()">Approve Resit</button>
   </div>
 
-  <div class="container">
-    <h3>Submit Resit Result</h3>
-    <input type="number" id="resitIdExec" placeholder="Resit ID" />
-    <input type="number" id="resitTest" placeholder="Test Score" />
-    <input type="number" id="resitExam" placeholder="Exam Score" />
-    <input type="text" id="resitNote" placeholder="Note (e.g. Resit after illness)" />
+  <div class="card">
+    <h3>Submit Resit Result (teacher)</h3>
+    <input id="execResitId" placeholder="Resit ID (number)" />
+    <input id="execTest" type="number" placeholder="Test score" />
+    <input id="execExam" type="number" placeholder="Exam score" />
+    <input id="execNote" placeholder="Note (e.g. Resit result)" />
     <button onclick="submitResit()">Submit Resit Result</button>
   </div>
 
-  <div class="container">
+  <div class="card">
     <h3>View Student Attempts</h3>
-    <input type="text" id="viewStudent" placeholder="Student Address" />
+    <input id="viewStudent" placeholder="Student address" />
     <button onclick="viewAttempts()">View Attempts</button>
-    <pre id="output"></pre>
+    <pre id="attemptsOutput">No results yet.</pre>
   </div>
 
-  <script>
-    let web3;
-    let contract;
-    const contractAddress = "0x6FDFec05594de0C1dBC92dc45779fE1FC0416d33"; // Replace with your deployed contract address
+  <div class="card">
+    <h3>View Resit Requests for Student</h3>
+    <input id="viewReqStudent" placeholder="Student address" />
+    <button onclick="viewRequests()">View Resits</button>
+    <div id="resitsOutput">No resits yet.</div>
+  </div>
 
-    const abi = [
-      // simplified ABI for key functions
-      {
-        "inputs": [
-          {"internalType":"address","name":"_student","type":"address"},
-          {"internalType":"uint256","name":"_testScore","type":"uint256"},
-          {"internalType":"uint256","name":"_examScore","type":"uint256"},
-          {"internalType":"string","name":"_note","type":"string"}
-        ],
-        "name":"recordInitialAttempt",
-        "outputs":[],
-        "stateMutability":"nonpayable",
-        "type":"function"
-      },
-      {
-        "inputs":[{"internalType":"address","name":"_student","type":"address"},{"internalType":"string","name":"_reason","type":"string"}],
-        "name":"requestResit","outputs":[],"stateMutability":"nonpayable","type":"function"
-      },
-      {
-        "inputs":[{"internalType":"uint256","name":"_resitId","type":"uint256"}],
-        "name":"approveResit","outputs":[],"stateMutability":"nonpayable","type":"function"
-      },
-      {
-        "inputs":[
-          {"internalType":"uint256","name":"_resitId","type":"uint256"},
-          {"internalType":"uint256","name":"_testScore","type":"uint256"},
-          {"internalType":"uint256","name":"_examScore","type":"uint256"},
-          {"internalType":"string","name":"_note","type":"string"}
-        ],
-        "name":"submitResitResult",
-        "outputs":[],
-        "stateMutability":"nonpayable",
-        "type":"function"
-      },
-      {
-        "inputs":[{"internalType":"address","name":"_student","type":"address"}],
-        "name":"getAllAttempts",
-        "outputs":[{"components":[
-          {"internalType":"uint256","name":"testScore","type":"uint256"},
-          {"internalType":"uint256","name":"examScore","type":"uint256"},
-          {"internalType":"uint256","name":"finalGrade","type":"uint256"},
-          {"internalType":"uint256","name":"timestamp","type":"uint256"},
-          {"internalType":"string","name":"note","type":"string"}
-        ],"internalType":"struct TransparentGradingWithResits.Attempt[]","name":"","type":"tuple[]"}],
-        "stateMutability":"view","type":"function"
-      }
-    ];
+<script>
+  // ======= CONFIGURE ========
+  const contractAddress = "YOUR_CONTRACT_ADDRESS"; // <- REPLACE with your deployed contract address
+  const abi = [
+    // minimal ABI needed for functions used (keep in sync with your contract)
+    {"inputs":[{"internalType":"address","name":"_student","type":"address"},{"internalType":"uint256","name":"_testScore","type":"uint256"},{"internalType":"uint256","name":"_examScore","type":"uint256"},{"internalType":"string","name":"_note","type":"string"}],"name":"recordInitialAttempt","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"internalType":"address","name":"_student","type":"address"},{"internalType":"string","name":"_reason","type":"string"}],"name":"requestResit","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"_resitId","type":"uint256"}],"name":"approveResit","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"_resitId","type":"uint256"},{"internalType":"uint256","name":"_testScore","type":"uint256"},{"internalType":"uint256","name":"_examScore","type":"uint256"},{"internalType":"string","name":"_note","type":"string"}],"name":"submitResitResult","outputs":[],"stateMutability":"nonpayable","type":"function"},
 
-    async function connectWallet() {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const accounts = await web3.eth.getAccounts();
-        document.getElementById("wallet").textContent = accounts[0];
-        const network = await web3.eth.net.getNetworkType();
-        document.getElementById("network").textContent = network;
-        contract = new web3.eth.Contract(abi, contractAddress);
-        alert("Wallet connected!");
-      } else {
-        alert("Please install MetaMask!");
-      }
-    }
+    {"inputs":[{"internalType":"address","name":"_student","type":"address"}],"name":"getAllAttempts","outputs":[{"components":[{"internalType":"uint256","name":"testScore","type":"uint256"},{"internalType":"uint256","name":"examScore","type":"uint256"},{"internalType":"uint256","name":"finalGrade","type":"uint256"},{"internalType":"uint256","name":"timestamp","type":"uint256"},{"internalType":"string","name":"note","type":"string"}],"internalType":"struct TransparentGradingWithResits.Attempt[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"address","name":"_student","type":"address"}],"name":"getResitsByStudent","outputs":[{"internalType":"uint256[]","name":"","type":"uint256[]"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"resits","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"student","type":"address"},{"internalType":"string","name":"reason","type":"string"},{"internalType":"uint256","name":"requestedAt","type":"uint256"},{"internalType":"bool","name":"resolved","type":"bool"},{"internalType":"bool","name":"executed","type":"bool"},{"internalType":"uint256","name":"approvalsCount","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"hasPendingResit","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
+  ];
 
-    async function recordAttempt() {
-      const s = document.getElementById("student").value;
-      const t = document.getElementById("testScore").value;
-      const e = document.getElementById("examScore").value;
-      const n = document.getElementById("note").value;
-      const accounts = await web3.eth.getAccounts();
-      await contract.methods.recordInitialAttempt(s, t, e, n).send({ from: accounts[0] });
-      alert("Attempt recorded!");
-    }
+  // ======= END CONFIG ========
+  let web3, contract;
 
-    async function requestResit() {
+  async function connectWallet() {
+    if (!window.ethereum) return alert("Install MetaMask");
+    web3 = new Web3(window.ethereum);
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const accounts = await web3.eth.getAccounts();
+    document.getElementById("wallet").textContent = accounts[0];
+    const chainId = await web3.eth.getChainId();
+    document.getElementById("network").textContent = chainId === 11155111 ? "Sepolia" : "Other network ("+chainId+")";
+    contract = new web3.eth.Contract(abi, contractAddress);
+    // check pending state and update UI if student in input
+    watchInputs();
+  }
+
+  function watchInputs() {
+    // when student address changed in request form, check pending
+    document.getElementById("resitStudent").addEventListener("input", async () => {
       const s = document.getElementById("resitStudent").value;
-      const r = document.getElementById("resitReason").value;
-      const accounts = await web3.eth.getAccounts();
-      await contract.methods.requestResit(s, r).send({ from: accounts[0] });
-      alert("Resit requested!");
-    }
+      if (web3 && s && web3.utils.isAddress(s)) {
+        try {
+          const pending = await contract.methods.hasPendingResit(s).call();
+          document.getElementById("requestBtn").disabled = pending;
+          document.getElementById("requestResult").innerHTML = pending ? "<span style='color:#a05a00'>Student has a pending resit request — wait for resolution</span>" : "";
+        } catch (e) { console.error(e); }
+      } else {
+        document.getElementById("requestBtn").disabled = false;
+        document.getElementById("requestResult").innerHTML = "";
+      }
+    });
+  }
 
-    async function approveResit() {
-      const id = document.getElementById("resitId").value;
-      const accounts = await web3.eth.getAccounts();
-      await contract.methods.approveResit(id).send({ from: accounts[0] });
-      alert("Resit approved!");
-    }
+  async function recordAttempt() {
+    if (!contract) return alert("Connect wallet first");
+    const s = document.getElementById("studentAddr").value;
+    const t = document.getElementById("testScore").value;
+    const e = document.getElementById("examScore").value;
+    const n = document.getElementById("note").value || "Initial";
+    if (!web3.utils.isAddress(s)) return alert("Invalid student address");
+    const accounts = await web3.eth.getAccounts();
+    await contract.methods.recordInitialAttempt(s, t, e, n).send({ from: accounts[0] });
+    alert("Attempt recorded on-chain");
+  }
 
-    async function submitResit() {
-      const id = document.getElementById("resitIdExec").value;
-      const t = document.getElementById("resitTest").value;
-      const e = document.getElementById("resitExam").value;
-      const n = document.getElementById("resitNote").value;
-      const accounts = await web3.eth.getAccounts();
-      await contract.methods.submitResitResult(id, t, e, n).send({ from: accounts[0] });
-      alert("Resit result submitted!");
-    }
+  async function requestResit() {
+    if (!contract) return alert("Connect wallet first");
+    const s = document.getElementById("resitStudent").value;
+    const r = document.getElementById("resitReason").value;
+    if (!web3.utils.isAddress(s)) return alert("Invalid student address");
+    // check pending client-side too
+    const pending = await contract.methods.hasPendingResit(s).call();
+    if (pending) return alert("Student already has a pending resit request.");
+    const accounts = await web3.eth.getAccounts();
+    await contract.methods.requestResit(s, r).send({ from: accounts[0] });
+    document.getElementById("requestResult").innerHTML = "<span style='color:green'>Resit requested — awaiting approvals</span>";
+    document.getElementById("requestBtn").disabled = true;
+  }
 
-    async function viewAttempts() {
-      const s = document.getElementById("viewStudent").value;
-      const attempts = await contract.methods.getAllAttempts(s).call();
-      document.getElementById("output").textContent = JSON.stringify(attempts, null, 2);
+  async function approveResit() {
+    if (!contract) return alert("Connect wallet first");
+    const id = document.getElementById("approveId").value;
+    if (!id) return alert("Enter resit id");
+    const accounts = await web3.eth.getAccounts();
+    await contract.methods.approveResit(id).send({ from: accounts[0] });
+    alert("Approved (if you are an approver). Check Etherscan for events.");
+  }
+
+  async function submitResit() {
+    if (!contract) return alert("Connect wallet first");
+    const id = document.getElementById("execResitId").value;
+    const t = document.getElementById("execTest").value;
+    const e = document.getElementById("execExam").value;
+    const n = document.getElementById("execNote").value || "Resit result";
+    if (!id) return alert("Enter resit id");
+    const accounts = await web3.eth.getAccounts();
+    await contract.methods.submitResitResult(id, t, e, n).send({ from: accounts[0] });
+    alert("Resit result submitted and recorded.");
+    // if the student had a pending flag, it's reset inside contract; we can refresh UI state
+    const s = document.getElementById("resitStudent").value;
+    if (s && web3.utils.isAddress(s)) {
+      const pending = await contract.methods.hasPendingResit(s).call();
+      document.getElementById("requestBtn").disabled = pending;
+      document.getElementById("requestResult").innerHTML = pending ? "<span style='color:#a05a00'>Student has a pending resit request — wait for resolution</span>" : "";
     }
-  </script>
+  }
+
+  async function viewAttempts() {
+    if (!contract) return alert("Connect wallet first");
+    const s = document.getElementById("viewStudent").value;
+    if (!web3.utils.isAddress(s)) return alert("Invalid student address");
+    const attempts = await contract.methods.getAllAttempts(s).call();
+    if (!attempts || attempts.length === 0) {
+      document.getElementById("attemptsOutput").textContent = "No attempts found.";
+      return;
+    }
+    let out = "Attempts:\n\n";
+    attempts.forEach((a, i) => {
+      const date = new Date(a.timestamp * 1000).toLocaleString();
+      out += `#${i} — final: ${a.finalGrade}, test: ${a.testScore}, exam: ${a.examScore}\nNote: ${a.note}\nTime: ${date}\n\n`;
+    });
+    document.getElementById("attemptsOutput").textContent = out;
+  }
+
+  async function viewRequests() {
+    if (!contract) return alert("Connect wallet first");
+    const s = document.getElementById("viewReqStudent").value;
+    if (!web3.utils.isAddress(s)) return alert("Invalid student address");
+    const ids = await contract.methods.getResitsByStudent(s).call();
+    if (!ids || ids.length === 0) {
+      document.getElementById("resitsOutput").innerHTML = "<p>No resit requests for this student.</p>";
+      return;
+    }
+    let html = "";
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const r = await contract.methods.resits(id).call();
+      const date = new Date(Number(r.requestedAt) * 1000).toLocaleString();
+      const statusTag = r.executed ? `<span class="tag resolved">Executed</span>` : (r.resolved ? `<span class="tag resolved">Approved</span>` : `<span class="tag pending">Pending</span>`);
+      html += `<div style="padding:8px;border-bottom:1px solid #eee;">
+        <strong>Resit ID:</strong> ${r.id} &nbsp; ${statusTag} <br>
+        <strong>Reason:</strong> ${r.reason} <br>
+        <strong>Requested At:</strong> ${date} <br>
+        <strong>Approvals:</strong> ${r.approvalsCount} <br>
+        <strong>Executed:</strong> ${r.executed} <br>
+        </div>`;
+    }
+    document.getElementById("resitsOutput").innerHTML = html;
+  }
+
+  // auto-run small watcher if wallet connected earlier
+  window.addEventListener('load', () => {
+    if (window.ethereum) {
+      // optionally auto-connect in dev, but prefer manual connect
+    }
+  });
+</script>
 </body>
 </html>
