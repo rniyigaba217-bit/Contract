@@ -73,7 +73,7 @@
 
 <script>
   // ======= CONFIGURE ========
-  const contractAddress = "YOUR_CONTRACT_ADDRESS"; // <- REPLACE with your deployed contract address
+  const contractAddress = "0xFB9e740120F7E8e40fC33173d0Ac2e113027b1f3"; // <- REPLACE with your deployed contract address
   const abi = [
     // minimal ABI needed for functions used (keep in sync with your contract)
     {"inputs":[{"internalType":"address","name":"_student","type":"address"},{"internalType":"uint256","name":"_testScore","type":"uint256"},{"internalType":"uint256","name":"_examScore","type":"uint256"},{"internalType":"string","name":"_note","type":"string"}],"name":"recordInitialAttempt","outputs":[],"stateMutability":"nonpayable","type":"function"},
@@ -133,18 +133,25 @@
   }
 
   async function requestResit() {
-    if (!contract) return alert("Connect wallet first");
-    const s = document.getElementById("resitStudent").value;
-    const r = document.getElementById("resitReason").value;
-    if (!web3.utils.isAddress(s)) return alert("Invalid student address");
-    // check pending client-side too
-    const pending = await contract.methods.hasPendingResit(s).call();
-    if (pending) return alert("Student already has a pending resit request.");
-    const accounts = await web3.eth.getAccounts();
-    await contract.methods.requestResit(s, r).send({ from: accounts[0] });
-    document.getElementById("requestResult").innerHTML = "<span style='color:green'>Resit requested — awaiting approvals</span>";
-    document.getElementById("requestBtn").disabled = true;
+  const student = document.getElementById("studentAddress").value;
+  const reason = document.getElementById("resitReason").value;
+
+  try {
+    await contract.methods.requestResit(student, reason).send({ from: currentAccount });
+    alert("Resit request sent successfully!");
+  } catch (error) {
+    // Check if it's a revert message from the contract
+    if (error.message.includes("Student already completed a resit before")) {
+      alert("This student has already completed a resit and cannot request another one.");
+    } else if (error.message.includes("Student already has a pending resit request")) {
+      alert("This student already has a pending resit request waiting for approval.");
+    } else {
+      console.error(error);
+      alert("Transaction failed. Please check the console for details.");
+    }
   }
+}
+
 
   async function approveResit() {
     if (!contract) return alert("Connect wallet first");
